@@ -5,7 +5,9 @@ personal finances. It covers manual transaction entry, budgeting, reconciliation
 and reports. It never connects to banks or cloud services.
 
 > **Status:** early design. The database schema ([db/schema.sql](db/schema.sql))
-> is drafted. The application itself has not been written yet.
+> is drafted, and implementation details agreed during planning are in
+> [docs/design-notes.md](docs/design-notes.md). The application itself has not
+> been written yet.
 
 ## Goals
 
@@ -23,6 +25,9 @@ and reports. It never connects to banks or cloud services.
 
 - Double-entry bookkeeping with split transactions
 - Hierarchical accounts and categories (for example `Auto:Fuel`)
+- Archiving of accounts and categories: archived ones keep all their history
+  and still appear in reports, but are not offered when entering new
+  transactions
 - Payees with default categories, and tags (Quicken classes import as tags)
 - Scheduled and recurring transactions, with optional automatic entry
 - Statement reconciliation
@@ -62,6 +67,8 @@ The schema in [db/schema.sql](db/schema.sql) targets MySQL 8.0.16 or later
 Useful views:
 
 - `v_account_paths`: the full colon-separated path of every account
+- `v_selectable_accounts`: the accounts and categories that are not archived,
+  for the pickers used when entering transactions
 - `v_account_balances`: current, cleared and reconciled balance per account
 - `v_unbalanced_transactions`: an integrity check that should always return no rows
 
@@ -87,5 +94,29 @@ Not final yet:
 
 ```
 db/
-  schema.sql    MySQL schema, version 1
+  schema.sql       MySQL schema, version 1
+docs/
+  design-notes.md  Export/import format and rules, QIF import, performance, backups
+src/household_finance/
+  qif/             QIF parser, transfer matching and import plan (no database yet)
+tests/             pytest suite; fixtures are synthetic, never real data
 ```
+
+## Development
+
+```sh
+python -m venv .venv
+.venv\Scripts\python -m pip install -e ".[dev]"
+.venv\Scripts\python -m pytest
+```
+
+Check a Quicken QIF export without writing to any database:
+
+```sh
+.venv\Scripts\python -m household_finance.qif path\to\export.qif --year 2025
+```
+
+The report shows each account's balance, cleared balance and reconciled
+balance to compare with Quicken, transfers that need review, and warnings.
+Add `--register NAME` to list one account's transactions with a running
+balance.

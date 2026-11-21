@@ -1,0 +1,154 @@
+!Option:AutoSwitch
+!Account
+NChecking
+TBank
+DMain checking
+^
+NSavings
+TBank
+^
+NVisa
+TCCard
+^
+NBrokerage
+TInvst
+^
+NMortgage
+TOth L
+^
+!Clear:AutoSwitch
+!Type:Cat
+NAuto
+DAutomobile
+E
+^
+NAuto:Fuel
+DGas
+E
+^
+NGroceries
+E
+^
+NSalary
+I
+T
+R256
+^
+NMortgage Int
+E
+^
+!Type:Class
+NBusiness
+DSide business
+^
+!Account
+NChecking
+TBank
+^
+!Type:Bank
+D1/ 1'26
+T1,000.00
+CX
+POpening Balance
+L[Checking]
+^
+D1/ 5'26
+U-120.00
+T-120.00
+C*
+N1001
+PSafeway
+MWeekly shop
+LGroceries/Business
+^
+D1/10'26
+T-500.00
+PTransfer
+L[Savings]
+^
+D1/15'26
+T-300.00
+PSplit payment
+MJanuary
+SAuto:Fuel
+EGas
+$-100.00
+S[Savings]
+ESave some
+$-150.00
+S[Visa]
+$-50.00
+^
+D1/20'26
+T2,000.00
+PEmployer
+LSalary
+^
+D1/25'26
+T-250.00
+PBroker
+L[Brokerage]
+^
+D1/28'26
+T-75.00
+PCoffee Shop
+LDining Out
+^
+D1/30'26
+T-40.00
+POld account
+L[Old Savings]
+^
+!Account
+NSavings
+TBank
+^
+!Type:Bank
+D1/10'26
+T500.00
+CX
+PTransfer
+L[Checking]
+^
+D1/15'26
+T150.00
+PSplit payment
+MSave some
+L[Checking]
+^
+D1/31'26
+T10.00
+PMystery
+L[Checking]
+^
+!Account
+NVisa
+TCCard
+^
+!Type:CCard
+D1/ 2'26
+T-60.00
+PShell
+LAuto:Fuel
+^
+D1/17'26
+T50.00
+C*
+PPayment
+L[Checking]
+^
+!Account
+NBrokerage
+TInvst
+^
+!Type:Invst
+D1/25'26
+NXIn
+T250.00
+L[Checking]
+^
+!Type:Memorized
+KC
+PSafeway
+T-100.00
+^

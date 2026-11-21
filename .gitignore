@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# Real financial data must never be committed. Test fixtures are synthetic.
+*.qif
+*.QIF
+!tests/fixtures/*.qif
