@@ -4,12 +4,12 @@ category/transfer fields."""
 from __future__ import annotations
 
 import re
-import unicodedata
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
-CENT = Decimal("0.01")
+from ..money import CENT
+from ..text import name_key  # noqa: F401  (re-exported for the QIF modules)
 
 
 class QifValueError(ValueError):
@@ -109,11 +109,3 @@ def parse_category_field(text: str) -> CategoryRef:
     if category.casefold() == "--split--":
         category = ""
     return CategoryRef(category or None, False, tag.strip() or None)
-
-
-def name_key(name: str) -> str:
-    """Comparison key matching MySQL's utf8mb4_0900_ai_ci collation closely
-    enough for import: case- and accent-insensitive."""
-    decomposed = unicodedata.normalize("NFKD", name)
-    stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
-    return stripped.casefold()

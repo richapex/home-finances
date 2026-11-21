@@ -7,3 +7,7 @@ __pycache__/
 *.qif
 *.QIF
 !tests/fixtures/*.qif
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+backups/

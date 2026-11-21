@@ -168,7 +168,7 @@ def test_windows_1252_decoding():
 
 
 def test_cli_report(capsys):
-    assert main([str(FIXTURE), "--year", "2026", "--register", "Checking"]) == 0
+    assert main(["report", str(FIXTURE), "--year", "2026", "--register", "Checking"]) == 0
     out = capsys.readouterr().out
     assert "Transactions to import:       10" in out
     assert "TRANSFERS TO REVIEW" in out

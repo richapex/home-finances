@@ -35,7 +35,8 @@ from .values import name_key
 OPENING_BALANCES = "Opening Balances"
 UNCATEGORIZED = "Uncategorized"
 
-# Column sizes in db/schema.sql
+# Length limits for imported text. SQLite TEXT columns have no size limit;
+# these keep names and memos usable in the UI.
 MAX_ACCOUNT_NAME = 100
 MAX_PAYEE = 150
 MAX_MEMO = 255

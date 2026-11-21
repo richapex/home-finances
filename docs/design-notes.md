@@ -1,7 +1,8 @@
 # Design notes
 
 Decisions agreed during planning that are not captured by
-[README.md](../README.md) or [db/schema.sql](../db/schema.sql). Read this
+[README.md](../README.md) or
+[src/household_finance/schema.sql](../src/household_finance/schema.sql). Read this
 before implementing export/import, the QIF importer, account registers or
 backups.
 
@@ -113,9 +114,12 @@ Data flows in two directions, by two different mechanisms:
 | Primary → satellite | Full database copy | Everything, replacing the satellite's data |
 
 The full copy keeps satellites' accounts, payees, history and reconciled
-status current. It can be a `mysqldump` of the primary or an app-level full
-export; either way the satellite's own `installations` row (its
-`is_this_installation` flag and identity) must survive the refresh. Before
+status current. It is a copy of the primary's SQLite file, made with SQLite's
+online backup (`db.backup`) so it is consistent even while the primary is
+running. The satellite's own `installations` row (its `is_this_installation`
+flag and identity) must survive the refresh: after copying, the app restores
+the flags so that the satellite's row, not the primary's, is marked as this
+installation. Before
 replacing its data, the satellite should warn if it holds transactions that
 have not been exported to the primary since they were last changed.
 
@@ -162,10 +166,10 @@ importer must merge the two halves into a single double-entry transaction:
 
 ### Implementation rules (src/household_finance/qif)
 
-The importer works in two stages. `parser.py` reads the file into typed
+The importer works in three stages. `parser.py` reads the file into typed
 records. `plan.py` turns those into a database-independent **import plan**:
-the accounts, payees and tags to create, plus balanced transactions. The
-database writer (not written yet) will insert the plan. Rules decided while
+the accounts, payees and tags to create, plus balanced transactions.
+`writer.py` inserts the plan as one import batch. Rules decided while
 building it:
 
 - **Transfer merge.** Matched register transactions are merged into one
@@ -194,7 +198,8 @@ building it:
 - **Name clash** between a top-level category and an account (for example
   account `Mortgage` and category `Mortgage:Interest`): the category is renamed
   to `Mortgage (category)`. Names are compared case- and accent-insensitively,
-  like the database collation. A `:` in an account name becomes `-`.
+  the same way as the database's `name_key` columns. A `:` in an account name
+  becomes `-`.
 - **Categories used but not listed** are created as income if their net
   register amount is positive, otherwise expense. A child takes its parent's
   kind.
@@ -207,11 +212,32 @@ building it:
   the primary half. A memo on the other half is kept on its account split
   when it differs from the header memo.
 
-Check a file without touching any database:
+Writing to the database (`writer.py`):
 
-```sh
-python -m household_finance.qif export.qif --year 2025 --register Checking
-```
+- **One database transaction per import.** If anything fails, including the
+  final `v_unbalanced_transactions` check, nothing is written. The
+  `import_batches` row records the counts and a note listing any archived
+  accounts the import posted to.
+- **Existing accounts, payees and tags are reused**, matched by path or name
+  `name_key`. Importing into a database where a name already exists with a
+  different kind (for example an asset account `Groceries` when the file needs
+  a category) is refused, with a message to rename one of them.
+- **Created rows carry `import_batch_id`** (accounts, payees, tags and
+  transactions), so a rollback knows what the batch created.
+- **Audit.** There is one `audit_log` row per created account, payee, tag and
+  transaction. A transaction's row includes its splits, with money written as
+  strings.
+- **The same file twice** (same SHA-256) is refused while its earlier batch is
+  still `completed`. `--allow-duplicate` overrides this.
+- **Rollback** deletes the batch's transactions and then whichever of its
+  accounts, payees and tags nothing else uses. Rows that are still in use are
+  kept and listed. Rollback is refused if any of the batch's splits belongs to
+  a reconciliation done after the import.
+- **Backups.** The command line backs up the database before an import or a
+  rollback when the database already holds transactions.
+- **Speed.** About 20,000 transactions import in roughly 7 seconds.
+
+Commands are in the README ("Importing from Quicken").
 
 ### Validation
 
@@ -237,8 +263,10 @@ python -m household_finance.qif export.qif --year 2025 --register Checking
 
 ## 6. Backups
 
-- Run a scheduled `mysqldump` of the primary's database, for example daily,
-  kept on a different drive or cloud folder.
+- Back up the primary's database file on a schedule, for example daily, to a
+  different drive or a cloud folder. Use `db.backup`, which runs SQLite's
+  online backup. Never copy the `.sqlite` file directly while the app is
+  running: in WAL mode, recent changes may still be in the `-wal` file.
 - Take a backup automatically before any import (QIF or JSON) and before a
-  satellite refresh.
-- Attachment files on disk must be backed up alongside the database dump.
+  satellite refresh. The QIF command line already does this.
+- Attachment files on disk must be backed up alongside the database file.
