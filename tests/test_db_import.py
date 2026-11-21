@@ -235,6 +235,7 @@ def test_cli_import_batches_rollback(tmp_path, capsys):
 
     assert main(["import", str(qif), "--db", str(books)]) == 1  # same file again
     assert "already imported" in capsys.readouterr().err
+    assert not (tmp_path / "backups").exists()  # refused import must not back up
 
     assert main(["batches", "--db", str(books)]) == 0
     assert "completed" in capsys.readouterr().out

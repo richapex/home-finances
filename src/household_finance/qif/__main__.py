@@ -24,6 +24,7 @@ from .writer import (
     DuplicateImport,
     ImportConflict,
     RollbackRefused,
+    check_not_duplicate,
     file_sha256,
     import_plan,
     list_batches,
@@ -65,11 +66,15 @@ def cmd_import(args: argparse.Namespace) -> int:
     plan = build_plan(read_qif_file(args.file, args.account_name), args.date_window)
     sys.stdout.write(format_report(plan, year=args.year, register=args.register,
                                    max_items=args.max_items))
+    digest = file_sha256(args.file)
     conn = db.connect(args.db)
     try:
+        # Refuse a duplicate before backing up, so a refused import writes nothing.
+        if not args.allow_duplicate:
+            check_not_duplicate(conn, digest)
         _backup_if_needed(conn, args.db, "before-qif-import", args.no_backup)
         result = import_plan(conn, plan, file_name=Path(args.file).name,
-                             file_sha256=file_sha256(args.file),
+                             file_sha256=digest,
                              allow_duplicate=args.allow_duplicate)
     except (DuplicateImport, ImportConflict) as exc:
         print(f"\nNot imported: {exc}", file=sys.stderr)

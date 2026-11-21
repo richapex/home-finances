@@ -124,18 +124,25 @@ def transaction_snapshot(conn: sqlite3.Connection, txn_id: int,
 
 # -- import ------------------------------------------------------------------------
 
+def check_not_duplicate(conn: sqlite3.Connection, file_sha256: str | None) -> None:
+    """Raise DuplicateImport if a completed batch already holds this file."""
+    if not file_sha256:
+        return
+    prior = conn.execute(
+        "SELECT id, imported_at FROM import_batches"
+        " WHERE file_sha256 = ? AND status = 'completed'", (file_sha256,)).fetchone()
+    if prior:
+        raise DuplicateImport(
+            f"this file was already imported as batch {prior['id']} on "
+            f"{prior['imported_at']} UTC; roll that batch back first or allow duplicates")
+
+
 def import_plan(conn: sqlite3.Connection, plan: ImportPlan, *, file_name: str,
                 file_sha256: str | None = None, user_id: int | None = None,
                 installation_id: int | None = None,
                 allow_duplicate: bool = False) -> ImportResult:
-    if file_sha256 and not allow_duplicate:
-        prior = conn.execute(
-            "SELECT id, imported_at FROM import_batches"
-            " WHERE file_sha256 = ? AND status = 'completed'", (file_sha256,)).fetchone()
-        if prior:
-            raise DuplicateImport(
-                f"this file was already imported as batch {prior['id']} on "
-                f"{prior['imported_at']} UTC; roll that batch back first or allow duplicates")
+    if not allow_duplicate:
+        check_not_duplicate(conn, file_sha256)
     with transaction(conn):
         return _Writer(conn, plan, user_id, installation_id).run(file_name, file_sha256)
 
