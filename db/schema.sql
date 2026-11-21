@@ -83,6 +83,25 @@ CREATE TABLE users (
 -- Accounts: real accounts (asset / liability), categories (income / expense)
 -- and equity. Hierarchical via parent_id; full path is "Auto:Fuel".
 -- A child must have the same kind as its parent (enforced by the app).
+--
+-- ARCHIVING (accounts and categories alike). An archived account keeps all
+-- of its splits, reconciliations and budget history; it is only removed from
+-- the lists used to enter new data. Rules the app enforces:
+-- * Not offered in account/category pickers for new transactions or splits,
+--   scheduled transactions, payee default categories or new budget lines.
+--   A payee whose default category is archived gets no category auto-filled.
+-- * Existing transactions still show it, and editing one may keep a split on
+--   it, but a split cannot be moved TO an archived account.
+-- * Reports, registers and searches still include it (the account list
+--   offers a "show archived" toggle).
+-- * Archiving a parent archives all its descendants; un-archiving a child
+--   un-archives its ancestors. So an active account never has an archived
+--   parent.
+-- * Archiving warns (does not block) when the balance is non-zero, there are
+--   uncleared splits, or an active schedule uses the account.
+-- * System accounts (is_system) cannot be archived (CHECK below).
+-- * Imports may still post to an archived account (e.g. a satellite mapping
+--   or a QIF category); the import summary lists those transactions.
 -- -----------------------------------------------------------------------------
 CREATE TABLE accounts (
   id                    INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -98,8 +117,9 @@ CREATE TABLE accounts (
   institution           VARCHAR(100) NULL,
   account_number_last4  CHAR(4)      NULL,
   tax_line              VARCHAR(100) NULL,   -- e.g. 'Schedule A: Charitable'
-  is_hidden             BOOLEAN      NOT NULL DEFAULT FALSE,
-  is_closed             BOOLEAN      NOT NULL DEFAULT FALSE,
+  is_system             BOOLEAN      NOT NULL DEFAULT FALSE,  -- seed accounts the app relies on
+  is_archived           BOOLEAN      NOT NULL DEFAULT FALSE,
+  archived_at           DATETIME     NULL,                    -- set when is_archived becomes TRUE
   sort_order            INT          NOT NULL DEFAULT 0,
   notes                 TEXT         NULL,
   source_ref            VARCHAR(255) NULL,   -- e.g. original QIF account/category name
@@ -120,7 +140,11 @@ CREATE TABLE accounts (
   CONSTRAINT ck_accounts_category_subtype
     CHECK ((kind IN ('income','expense')) = (subtype = 'category')),
   CONSTRAINT ck_accounts_equity_subtype
-    CHECK ((kind = 'equity') = (subtype = 'equity'))
+    CHECK ((kind = 'equity') = (subtype = 'equity')),
+  CONSTRAINT ck_accounts_archived_at
+    CHECK (is_archived = (archived_at IS NOT NULL)),
+  CONSTRAINT ck_accounts_system_not_archived
+    CHECK (NOT (is_system AND is_archived))
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
@@ -456,8 +480,12 @@ WITH RECURSIVE p (id, path, depth) AS (
     FROM accounts a JOIN p ON a.parent_id = p.id
 )
 SELECT a.id, a.uuid, a.parent_id, a.kind, a.subtype, p.path, p.depth,
-       a.is_hidden, a.is_closed
+       a.is_system, a.is_archived, a.archived_at, a.sort_order
   FROM accounts a JOIN p ON p.id = a.id;
+
+-- What the account/category pickers offer when entering new data.
+CREATE VIEW v_selectable_accounts AS
+SELECT * FROM v_account_paths WHERE is_archived = FALSE;
 
 -- Current, cleared and reconciled balance of each account (debit-positive).
 CREATE VIEW v_account_balances AS
@@ -490,8 +518,8 @@ HAVING imbalance <> 0 OR split_count = 0;
 INSERT INTO settings (setting_key, setting_value) VALUES
   ('schema_version', '1');
 
-INSERT INTO accounts (name, kind, subtype, notes) VALUES
-  ('Opening Balances', 'equity',  'equity',
+INSERT INTO accounts (name, kind, subtype, is_system, notes) VALUES
+  ('Opening Balances', 'equity',  'equity',   TRUE,
    'Offsets each account''s starting balance.'),
-  ('Uncategorized',    'expense', 'category',
+  ('Uncategorized',    'expense', 'category', TRUE,
    'Used for transactions entered or imported without a category.');
